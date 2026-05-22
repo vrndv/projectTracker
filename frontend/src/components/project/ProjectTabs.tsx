@@ -5,7 +5,7 @@ import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
-import { Package, Layers, Database, BarChart2, Target, MessageSquare, Image, ExternalLink, Plus, Send } from "lucide-react";
+import { Package, Layers, Database, BarChart2, Target, MessageSquare, Image, ExternalLink, Plus, Send, Users } from "lucide-react";
 import { cn, formatNumber, fullnessBg } from "@/lib/utils";
 import { InventoryTable } from "./InventoryTable";
 import { GoalsProgress } from "./GoalsProgress";
@@ -85,27 +85,33 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
     try {
       await api.post(`/api/projects/${slug}/goals`, { material, requiredAmount: parseInt(amount) });
       setMaterial(""); setAmount("");
-      refetch();
+      
+      // Since goals are fetched via a separate hook in ProjectPage, doing a window reload 
+      // is the cleanest way to sync the child hook without refactoring the parent state.
+      window.location.reload(); 
     } catch (err: any) { alert(err.message); }
   };
 
   return (
     <div className="space-y-6">
       {canManage && (
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-4 flex gap-3 items-end">
-          <div className="flex-1">
+        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-4 flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-[200px]">
             <label className="text-xs text-muted-foreground mb-1 block">Material Name (e.g. iron_ingot)</label>
-            <input required type="text" value={material} onChange={e => setMaterial(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm" />
+            <input required type="text" value={material} onChange={e => setMaterial(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" placeholder="iron_ingot" />
           </div>
           <div className="w-32">
-            <label className="text-xs text-muted-foreground mb-1 block">Amount Target</label>
-            <input required type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm" />
+            <label className="text-xs text-muted-foreground mb-1 block">Target</label>
+            <input required type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" placeholder="1000" />
           </div>
           <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90">Set Goal</button>
         </form>
       )}
       <div className="bg-card border border-border rounded-xl p-5">
-        <h2 className="font-semibold flex items-center gap-2 mb-4"><Target className="w-4 h-4 text-primary"/> Resource Goals</h2>
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="font-semibold flex items-center gap-2"><Target className="w-4 h-4 text-primary"/> Resource Goals</h2>
+            {canManage && <span className="text-xs text-muted-foreground">Submit an existing material to edit its target</span>}
+        </div>
         <GoalsProgress goals={goals} />
       </div>
     </div>
@@ -133,9 +139,9 @@ export function UpdatesTab({ slug, updates, user, refetch }: TabProps & { update
     <div className="space-y-6">
       {canPost && (
         <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-4 space-y-3">
-          <input required type="text" placeholder="Update Title" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm" />
-          <textarea required placeholder="Write your update... (Markdown supported)" value={content} onChange={e => setContent(e.target.value)} rows={3} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm" />
-          <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 flex items-center gap-2">
+          <input required type="text" placeholder="Update Title" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+          <textarea required placeholder="Write your update... (Markdown supported)" value={content} onChange={e => setContent(e.target.value)} rows={3} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+          <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 flex items-center gap-2 w-max">
             <Send className="w-4 h-4"/> Post Update
           </button>
         </form>
@@ -145,10 +151,10 @@ export function UpdatesTab({ slug, updates, user, refetch }: TabProps & { update
         {updates.length === 0 ? <p className="text-muted-foreground text-sm">No updates posted yet.</p> : updates.map((update) => (
           <div key={update.id} className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{update.author.username[0]}</div>
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{update.author.username[0].toUpperCase()}</div>
               <div>
                 <p className="text-sm font-medium">{update.author.username}</p>
-                <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(update.createdAt), { addSuffix: true })}</p>
+                <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(update.createdAt), { addSuffix: true })} ago</p>
               </div>
             </div>
             <h3 className="font-semibold text-lg mb-2">{update.title}</h3>
@@ -179,7 +185,7 @@ export function CommentsTab({ slug, comments, user, refetch }: TabProps & { comm
     <div className="space-y-6">
       {canPost && (
         <form onSubmit={handleSubmit} className="flex gap-3">
-          <input required type="text" placeholder="Add a comment..." value={content} onChange={e => setContent(e.target.value)} className="flex-1 bg-card border border-border rounded-lg px-4 py-2 text-sm focus:ring-1 focus:ring-primary" />
+          <input required type="text" placeholder="Add a comment..." value={content} onChange={e => setContent(e.target.value)} className="flex-1 bg-card border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
           <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90">Post</button>
         </form>
       )}
@@ -187,11 +193,11 @@ export function CommentsTab({ slug, comments, user, refetch }: TabProps & { comm
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
         {comments.length === 0 ? <p className="text-muted-foreground text-sm">No comments yet.</p> : comments.map((c) => (
           <div key={c.id} className="flex gap-3 border-b border-border/50 last:border-0 pb-4 last:pb-0">
-            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold text-sm flex-shrink-0">{c.author.username[0]}</div>
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold text-sm flex-shrink-0">{c.author.username[0].toUpperCase()}</div>
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium">{c.author.username}</span>
-                <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}</span>
+                <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })} ago</span>
               </div>
               <p className="text-sm text-foreground/90">{c.content}</p>
             </div>
@@ -221,18 +227,18 @@ export function MediaTab({ slug, media, user, refetch }: TabProps & { media: Pro
   return (
     <div className="space-y-6">
       {canManage && (
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-4 flex gap-3 items-end">
+        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-4 flex flex-wrap gap-3 items-end">
           <div className="w-32">
             <label className="text-xs text-muted-foreground mb-1 block">Type</label>
-            <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm">
+            <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary">
               <option value="IMAGE">Image</option>
               <option value="VIDEO">Video</option>
               <option value="EMBED">Embed</option>
             </select>
           </div>
-          <div className="flex-1">
-            <label className="text-xs text-muted-foreground mb-1 block">Media URL (Imgur, YouTube, etc)</label>
-            <input required type="url" value={url} onChange={e => setUrl(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm" />
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-xs text-muted-foreground mb-1 block">Media URL</label>
+            <input required type="url" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
           </div>
           <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 flex items-center gap-2"><Plus className="w-4 h-4"/> Add Media</button>
         </form>
@@ -277,40 +283,42 @@ export function MembersTab({ slug, members, user, refetch }: TabProps & { member
   return (
     <div className="space-y-6">
       {canManage && (
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-4 flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="text-xs text-muted-foreground mb-1 block">User Database ID (from Admin panel)</label>
-            <input required type="text" value={userId} onChange={e => setUserId(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm" placeholder="cuid_..."/>
+        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-4 flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-xs text-muted-foreground mb-1 block">User Database ID (Grab from Admin panel)</label>
+            <input required type="text" value={userId} onChange={e => setUserId(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" placeholder="cuid_..."/>
           </div>
-          <div className="w-40">
+          <div className="w-32">
             <label className="text-xs text-muted-foreground mb-1 block">Project Role</label>
-            <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm">
+            <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary">
               <option value="MEMBER">Member</option>
               <option value="BUILDER">Builder</option>
               <option value="ADMIN">Admin</option>
             </select>
           </div>
-          <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90">Add/Update Member</button>
+          <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90">Add Member</button>
         </form>
       )}
 
       <div className="bg-card border border-border rounded-xl p-5">
-        <h2 className="font-semibold mb-4 text-muted-foreground">Team Roster</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {members.map((m) => (
-            <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/50">
-              {m.user.avatar ? (
-                <img src={m.user.avatar} alt="" className="w-10 h-10 rounded-full" />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center font-bold">{m.user.username[0]}</div>
-              )}
-              <div>
-                <p className="text-sm font-medium">{m.user.username}</p>
-                <p className="text-xs text-muted-foreground">{m.role}</p>
+        <h2 className="font-semibold mb-4 flex items-center gap-2"><Users className="w-4 h-4 text-primary"/> Team Roster</h2>
+        {members.length === 0 ? <p className="text-muted-foreground text-sm">No members added yet.</p> : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {members.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                {m.user.avatar ? (
+                  <img src={m.user.avatar} alt="" className="w-10 h-10 rounded-full" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center font-bold">{m.user.username[0].toUpperCase()}</div>
+                )}
+                <div>
+                  <p className="text-sm font-medium">{m.user.username}</p>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded px-1">{m.role}</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

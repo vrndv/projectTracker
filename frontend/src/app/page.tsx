@@ -1,176 +1,129 @@
-// frontend/src/app/projects/[slug]/page.tsx
 "use client";
-
-import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
-import { MapPin, ExternalLink, Users, ArrowLeft, RefreshCw } from "lucide-react";
-import { useProject, useSnapshots, useGoals, useAuth } from "@/hooks/useData";
-import { cn, statusColor } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { Search, RefreshCw, Sword } from "lucide-react";
+import { useProjects } from "@/hooks/useData";
+import { ProjectCard } from "@/components/project/ProjectCard";
 
-// Import the new tab components (we will create these next)
-import { 
-  OverviewTab, GoalsTab, UpdatesTab, CommentsTab, MediaTab, MembersTab 
-} from "@/components/project/ProjectTabs";
+type SortKey = "updatedAt" | "fullness" | "totalItems" | "name";
 
-export default function ProjectPage() {
-  const params = useParams();
-  const slug = params.slug as string;
-  const { project, loading, error, refetch: refetchProject } = useProject(slug);
-  const { snapshots } = useSnapshots(slug);
-  const { goals, setGoals } = useGoals(slug);
-  const { user } = useAuth();
+export default function HomePage() {
+  const { projects, loading, error, refetch } = useProjects();
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortKey>("updatedAt");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
-  const [activeTab, setActiveTab] = useState("Overview");
-  const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({ name: "", description: "", status: "ACTIVE" });
+  const filtered = useMemo(() => {
+    let list = [...projects];
 
-  const canEdit = user && ["ADMIN", "BUILDER", "MEMBER"].includes(user.role);
-  const canDelete = user && ["ADMIN", "BUILDER"].includes(user.role);
-
-  const refetchAll = () => {
-    refetchProject();
-    // Re-triggering the goals hook isn't strictly necessary if we mutate state directly, 
-    // but useful for a full refresh.
-  };
-
-  const handleSave = async () => {
-    try {
-      await api.patch(`/api/projects/${slug}`, editData);
-      setIsEditing(false);
-      refetchAll();
-    } catch (e: any) {
-      alert("Failed to update: " + e.message);
+    if (search) {
+      list = list.filter((p) =>
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        p.description?.toLowerCase().includes(search.toLowerCase())
+      );
     }
-  };
 
-  const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${project?.name}?`)) return;
-    try {
-      await api.delete(`/api/projects/${slug}`);
-      window.location.href = "/";
-    } catch (e: any) {
-      alert("Failed to delete: " + e.message);
+    if (statusFilter !== "ALL") {
+      list = list.filter((p) => p.status === statusFilter);
     }
-  };
 
-  if (loading) return <div className="h-64 bg-card rounded-xl animate-pulse" />;
-  if (error || !project) return <div className="text-center py-16 text-destructive">Project not found</div>;
+    list.sort((a, b) => {
+      if (sort === "updatedAt") return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      if (sort === "fullness") return (b.latestSnapshot?.fullness ?? 0) - (a.latestSnapshot?.fullness ?? 0);
+      if (sort === "totalItems") return (b.latestSnapshot?.totalItems ?? 0) - (a.latestSnapshot?.totalItems ?? 0);
+      if (sort === "name") return a.name.localeCompare(b.name);
+      return 0;
+    });
 
-  const tabs = ["Overview", "Goals", "Updates", "Comments", "Media", "Members"];
+    return list;
+  }, [projects, search, sort, statusFilter]);
 
   return (
-    <div className="space-y-6">
-      <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="w-4 h-4" />
-        All projects
-      </Link>
-
-      {/* Header Profile */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-xl p-6">
-        {project.thumbnailUrl && (
-          <img src={project.thumbnailUrl} alt={project.name} className="w-full h-40 object-cover rounded-lg mb-4 border border-border" />
-        )}
-
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold capitalize">{project.name}</h1>
-              <span className={cn("text-xs px-2.5 py-1 rounded-full border font-medium", statusColor(project.status))}>
-                {project.status.toLowerCase()}
-              </span>
-            </div>
-            {project.description && <p className="text-muted-foreground">{project.description}</p>}
-          </div>
-          <button onClick={refetchAll} className="p-2 text-muted-foreground hover:text-foreground border border-border rounded-lg">
-            <RefreshCw className="w-4 h-4" />
-          </button>
+    <div>
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
+        <div className="flex items-center gap-3 mb-1">
+          <Sword className="w-6 h-6 text-primary" />
+          <h1 className="text-2xl font-bold text-foreground">Projects</h1>
         </div>
-
-        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-4">
-          {project.world && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5" />
-              {project.world} {project.x !== undefined && `(${Math.round(project.x)}, ${Math.round(project.y ?? 64)}, ${Math.round(project.z ?? 0)})`}
-            </span>
-          )}
-          {project.members.length > 0 && (
-            <span className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" />
-              {project.members.length} Members
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {project.mapUrl && (
-            <a href={project.mapUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg hover:bg-primary/20">
-              <ExternalLink className="w-3.5 h-3.5" /> Open Map
-            </a>
-          )}
-          {canEdit && (
-            <button onClick={() => { setEditData({ name: project.name, description: project.description || "", status: project.status }); setIsEditing(!isEditing); }} className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-muted border border-border rounded-lg hover:bg-accent">
-              {isEditing ? "Cancel Edit" : "Edit Project"}
-            </button>
-          )}
-          {canDelete && (
-            <button onClick={handleDelete} className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20">
-              Delete Project
-            </button>
-          )}
-        </div>
-
-        {isEditing && (
-          <div className="mt-6 p-4 border border-border bg-muted/30 rounded-xl space-y-4">
-            <input type="text" value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg" placeholder="Project Name" />
-            <textarea value={editData.description} onChange={e => setEditData({...editData, description: e.target.value})} className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg" placeholder="Description" />
-            <select value={editData.status} onChange={e => setEditData({...editData, status: e.target.value})} className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg">
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="PAUSED">PAUSED</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="ARCHIVED">ARCHIVED</option>
-            </select>
-            <button onClick={handleSave} className="w-full py-2 bg-primary text-primary-foreground font-medium rounded-lg">Save Changes</button>
-          </div>
-        )}
+        <p className="text-muted-foreground">Live inventory tracking for all Minecraft build projects.</p>
       </motion.div>
 
-      {/* Tab Navigation */}
-      <div className="flex space-x-1 border-b border-border overflow-x-auto pb-px">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
-              activeTab === tab 
-                ? "border-primary text-primary" 
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-            )}
-          >
-            {tab}
-            {tab === "Updates" && project.updates?.length ? ` (${project.updates.length})` : ""}
-            {tab === "Comments" && project.comments?.length ? ` (${project.comments.length})` : ""}
-          </button>
-        ))}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search projects…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-sm bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          className="px-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="updatedAt">Sort: Recent</option>
+          <option value="fullness">Sort: Fullness</option>
+          <option value="totalItems">Sort: Total items</option>
+          <option value="name">Sort: Name</option>
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="ALL">All statuses</option>
+          <option value="ACTIVE">Active</option>
+          <option value="PAUSED">Paused</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="ARCHIVED">Archived</option>
+        </select>
+
+        <button
+          onClick={refetch}
+          className="p-2 text-muted-foreground hover:text-foreground transition-colors border border-border rounded-lg bg-card"
+          title="Refresh"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Tab Content Panels */}
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-      >
-        {activeTab === "Overview" && <OverviewTab project={project} snapshots={snapshots} />}
-        {activeTab === "Goals" && <GoalsTab slug={slug} goals={goals} user={user} refetch={refetchAll} />}
-        {activeTab === "Updates" && <UpdatesTab slug={slug} updates={project.updates || []} user={user} refetch={refetchAll} />}
-        {activeTab === "Comments" && <CommentsTab slug={slug} comments={project.comments || []} user={user} refetch={refetchAll} />}
-        {activeTab === "Media" && <MediaTab slug={slug} media={project.media || []} user={user} refetch={refetchAll} />}
-        {activeTab === "Members" && <MembersTab slug={slug} members={project.members || []} user={user} refetch={refetchAll} />}
-      </motion.div>
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-xl p-4 h-48 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-destructive text-sm">
+          Failed to load projects: {error}
+        </div>
+      )}
+
+      {!loading && !error && filtered.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <Sword className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>No projects found</p>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((project, i) => (
+            <ProjectCard key={project.id} project={project} index={i} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
