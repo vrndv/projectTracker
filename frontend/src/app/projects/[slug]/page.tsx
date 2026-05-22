@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
@@ -8,11 +9,12 @@ import {
   MapPin, ExternalLink, Package, Database, Layers, Users,
   ArrowLeft, RefreshCw, Target, BarChart2, MessageSquare, Image,
 } from "lucide-react";
-import { useProject, useSnapshots, useGoals } from "@/hooks/useData";
+import { useProject, useSnapshots, useGoals, useAuth } from "@/hooks/useData";
 import { InventoryTable } from "@/components/project/InventoryTable";
 import { GoalsProgress } from "@/components/project/GoalsProgress";
 import { SnapshotCharts } from "@/components/charts/SnapshotCharts";
 import { cn, formatNumber, fullnessBg, statusColor } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 export default function ProjectPage() {
   const params = useParams();
@@ -20,6 +22,35 @@ export default function ProjectPage() {
   const { project, loading, error, refetch } = useProject(slug);
   const { snapshots } = useSnapshots(slug);
   const { goals } = useGoals(slug);
+
+  // Authentication and edit state
+  const { user } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({ name: "", description: "", status: "ACTIVE" });
+
+  // Permissions
+  const canEdit = user && ["ADMIN", "BUILDER", "MEMBER"].includes(user.role);
+  const canDelete = user && ["ADMIN", "BUILDER"].includes(user.role);
+
+  const handleSave = async () => {
+    try {
+      await api.patch(`/api/projects/${slug}`, editData);
+      setIsEditing(false);
+      refetch(); // Reload the updated project data
+    } catch (e: any) {
+      alert("Failed to update: " + e.message);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${project?.name}? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/api/projects/${slug}`);
+      window.location.href = "/"; // Redirect to dashboard after deletion
+    } catch (e: any) {
+      alert("Failed to delete: " + e.message);
+    }
+  };
 
   if (loading) {
     return (
@@ -113,7 +144,48 @@ export default function ProjectPage() {
               Watch video
             </a>
           )}
+
+          {canEdit && (
+            <button onClick={() => {
+              setEditData({ name: project.name, description: project.description || "", status: project.status });
+              setIsEditing(!isEditing);
+            }} className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-muted border border-border rounded-lg hover:bg-accent transition-colors">
+              {isEditing ? "Cancel Edit" : "Edit Project"}
+            </button>
+          )}
+
+          {canDelete && (
+            <button onClick={handleDelete} className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors">
+              Delete Project
+            </button>
+          )}
         </div>
+
+        {/* Edit Form */}
+        {isEditing && (
+          <div className="mt-6 p-4 border border-border bg-muted/30 rounded-xl space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
+              <input type="text" value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Description</label>
+              <textarea value={editData.description} onChange={e => setEditData({...editData, description: e.target.value})} className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Status</label>
+              <select value={editData.status} onChange={e => setEditData({...editData, status: e.target.value})} className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="PAUSED">PAUSED</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="ARCHIVED">ARCHIVED</option>
+              </select>
+            </div>
+            <button onClick={handleSave} className="w-full py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:opacity-90 transition-colors">
+              Save Changes
+            </button>
+          </div>
+        )}
       </motion.div>
 
       {/* Stats row */}

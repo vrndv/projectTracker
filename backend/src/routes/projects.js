@@ -15,12 +15,12 @@ router.post("/:slug/members", requireAuth, requireRole("ADMIN"), projectControll
 
 // Builder+
 router.post("/", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.createProject);
-router.patch("/:slug", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.updateProject);
 router.post("/:slug/updates", requireAuth, requireRole("ADMIN", "BUILDER", "MEMBER"), projectController.addUpdate);
 router.post("/:slug/media", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.addMedia);
 router.post("/:slug/goals", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.setGoal);
 
-// Admin only
-router.delete("/:slug", requireAuth, requireRole("ADMIN"), projectController.deleteProject);
+// Management (Edit/Delete) with updated roles
+router.patch("/:slug", requireAuth, requireRole("ADMIN", "BUILDER", "MEMBER"), projectController.updateProject);
+router.delete("/:slug", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.deleteProject);
 
 module.exports = router;
