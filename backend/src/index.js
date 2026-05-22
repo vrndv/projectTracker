@@ -18,6 +18,7 @@ const { errorHandler } = require("./middleware/errorHandler");
 const { wsClients } = require("./lib/ws");
 
 const app = express();
+app.set("trust proxy", 1);
 const server = http.createServer(app);
 
 // WebSocket server (ready for live updates)
