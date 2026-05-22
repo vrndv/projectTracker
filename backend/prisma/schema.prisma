@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  BUILDER
+  MEMBER
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  EMBED
+}
+
+model User {
+  id         String   @id @default(cuid())
+  discordId  String   @unique
+  username   String
+  avatar     String?
+  role       Role     @default(VIEWER)
+  createdAt  DateTime @default(now())
+
+  memberships    ProjectMember[]
+  updates        ProjectUpdate[]
+  comments       ProjectComment[]
+  media          ProjectMedia[]
+  playerStats    PlayerStats[]
+}
+
+model Project {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  description  String?
+  status       ProjectStatus @default(ACTIVE)
+  world        String?
+  x            Float?
+  y            Float?
+  z            Float?
+  videoUrl     String?
+  mapUrl       String?
+  thumbnailUrl String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  members   ProjectMember[]
+  goals     ProjectGoal[]
+  snapshots ProjectSnapshot[]
+  updates   ProjectUpdate[]
+  comments  ProjectComment[]
+  media     ProjectMedia[]
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      Role     @default(MEMBER)
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model ProjectGoal {
+  id             String  @id @default(cuid())
+  projectId      String
+  material       String
+  requiredAmount Int
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, material])
+}
+
+model ProjectSnapshot {
+  id          String   @id @default(cuid())
+  projectId   String
+  timestamp   DateTime @default(now())
+  fullness    Float
+  totalItems  Int
+  uniqueItems Int
+  containers  Int
+
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   ProjectItemSnapshot[]
+
+  @@index([projectId, timestamp])
+}
+
+model ProjectItemSnapshot {
+  id         String @id @default(cuid())
+  snapshotId String
+  material   String
+  amount     Int
+
+  snapshot ProjectSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId])
+}
+
+model ProjectUpdate {
+  id        String   @id @default(cuid())
+  projectId String
+  authorId  String
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id])
+}
+
+model ProjectComment {
+  id        String   @id @default(cuid())
+  projectId String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id])
+}
+
+model ProjectMedia {
+  id          String    @id @default(cuid())
+  projectId   String
+  uploadedBy  String
+  type        MediaType
+  url         String
+  createdAt   DateTime  @default(now())
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader User    @relation(fields: [uploadedBy], references: [id])
+}
+
+model PlayerStats {
+  id           String   @id @default(cuid())
+  userId       String
+  server       String
+  playtimeSecs Int      @default(0)
+  deaths       Int      @default(0)
+  kills        Int      @default(0)
+  blocksMined  Int      @default(0)
+  distanceMoved Float   @default(0)
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, server])
+}
