@@ -35,7 +35,7 @@ export function useProjects() {
 
 export function useProject(slug: string) {
   const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => isValidSlug(slug));
   const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
@@ -65,7 +65,7 @@ export function useProject(slug: string) {
 
 export function useSnapshots(slug: string) {
   const [snapshots, setSnapshots] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => isValidSlug(slug));
 
   useEffect(() => {
     if (!isValidSlug(slug)) {
