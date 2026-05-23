@@ -18,24 +18,14 @@ import { GoalsProgress } from "@/components/project/GoalsProgress";
 import { SnapshotCharts } from "@/components/charts/SnapshotCharts";
 import { MinecraftItem } from "@/components/project/MinecraftItem";
 
+// Tab-specific full-view components (still used when user clicks "View All")
 import {
   GoalsTab, UpdatesTab, CommentsTab, MediaTab, MembersTab
 } from "@/components/project/ProjectTabs";
 
 export default function ProjectPage({ params }: { params: { slug: string } }) {
+  const slug = params.slug;
 
-  // ✅ FIX: guard slug BEFORE hooks run
-  const slug = params?.slug;
-
-  if (!slug || slug === "undefined") {
-    return (
-      <div className="h-64 flex items-center justify-center animate-pulse">
-        Loading...
-      </div>
-    );
-  }
-
-  // Hooks now only run when slug exists
   const { project, loading, error, refetch: refetchProject } = useProject(slug);
   const { snapshots } = useSnapshots(slug);
   const { goals } = useGoals(slug);
@@ -43,11 +33,9 @@ export default function ProjectPage({ params }: { params: { slug: string } }) {
 
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({
-    name: "",
-    description: "",
-    status: "ACTIVE"
-  });
+  const [editData, setEditData] = useState({ name: "", description: "", status: "ACTIVE" });
+
+  if (!slug || slug === "undefined") return;
 
   const canEdit = user && ["ADMIN", "BUILDER", "MEMBER"].includes(user.role);
   const canDelete = user && ["ADMIN", "BUILDER"].includes(user.role);
@@ -64,7 +52,6 @@ export default function ProjectPage({ params }: { params: { slug: string } }) {
 
   const handleDelete = async () => {
     if (!confirm(`Are you sure you want to delete ${project?.name}? This cannot be undone.`)) return;
-
     try {
       await api.delete(`/api/projects/${slug}`);
       window.location.href = "/";
@@ -73,32 +60,22 @@ export default function ProjectPage({ params }: { params: { slug: string } }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="h-64 bg-card rounded-xl animate-pulse" />
-    );
-  }
+  if (loading) return <div className="h-64 bg-card rounded-xl animate-pulse" />;
 
   if (error || !project) {
     return (
       <div className="text-center py-16">
         <p className="text-destructive">Project not found</p>
-
-        <Link
-          href="/"
-          className="text-sm text-primary mt-2 inline-block"
-        >
-          ← Back to projects
-        </Link>
+        <Link href="/" className="text-sm text-primary mt-2 inline-block">← Back to projects</Link>
       </div>
     );
   }
 
   const snap = project.latestSnapshot;
   const fullness = snap?.fullness ?? 0;
-
   const recentUpdates = (project.updates || []).slice(0, 3);
   const recentComments = (project.comments || []).slice(0, 3);
+
   // If a full tab view is active, render it
   if (activeTab) {
     return (

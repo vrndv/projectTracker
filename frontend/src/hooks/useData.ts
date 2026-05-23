@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import type { Project } from "@/types";
@@ -22,6 +23,7 @@ export function useProjects() {
 
   useEffect(() => {
     fetch();
+
     const interval = setInterval(fetch, 30_000);
     return () => clearInterval(interval);
   }, [fetch]);
@@ -35,6 +37,12 @@ export function useProject(slug: string) {
   const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
+    // ✅ FIX
+    if (!slug || slug === "undefined") {
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await api.get<Project>(`/api/projects/${slug}`);
       setProject(data);
@@ -47,10 +55,13 @@ export function useProject(slug: string) {
   }, [slug]);
 
   useEffect(() => {
+    if (!slug || slug === "undefined") return;
+
     fetch();
+
     const interval = setInterval(fetch, 30_000);
     return () => clearInterval(interval);
-  }, [fetch]);
+  }, [fetch, slug]);
 
   return { project, loading, error, refetch: fetch };
 }
@@ -60,6 +71,12 @@ export function useSnapshots(slug: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // ✅ FIX
+    if (!slug || slug === "undefined") {
+      setLoading(false);
+      return;
+    }
+
     api.get<any[]>(`/api/projects/${slug}/snapshots?limit=48`)
       .then(setSnapshots)
       .catch(console.error)
@@ -73,6 +90,9 @@ export function useGoals(slug: string) {
   const [goals, setGoals] = useState<any[]>([]);
 
   useEffect(() => {
+    // ✅ FIX
+    if (!slug || slug === "undefined") return;
+
     api.get<any[]>(`/api/projects/${slug}/goals`)
       .then(setGoals)
       .catch(console.error);
