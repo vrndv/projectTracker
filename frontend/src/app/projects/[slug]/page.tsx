@@ -6,7 +6,8 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   MapPin, ExternalLink, Users, ArrowLeft, RefreshCw,
-  Target, Zap, MessageSquare, Package, BarChart2, Image as ImageIcon
+  Target, Zap, MessageSquare, Package, BarChart2, Image as ImageIcon,
+  Video, Navigation
 } from "lucide-react";
 import { useProject, useSnapshots, useGoals, useAuth } from "@/hooks/useData";
 import { cn, statusColor, formatNumber, fullnessBg } from "@/lib/utils";
@@ -18,15 +19,18 @@ import { GoalsProgress } from "@/components/project/GoalsProgress";
 import { SnapshotCharts } from "@/components/charts/SnapshotCharts";
 import { MinecraftItem } from "@/components/project/MinecraftItem";
 
-// Tab-specific full-view components (still used when user clicks "View All")
 import {
   GoalsTab, UpdatesTab, CommentsTab, MediaTab, MembersTab
 } from "@/components/project/ProjectTabs";
 
+function bluemapUrl(world: string | undefined, x: number, y: number, z: number) {
+  const w = world ?? "world";
+  return `https://varundev.tech/minnal-map/#${w}:${Math.round(x)}:${Math.round(y)}:${Math.round(z)}:150:0:0:0:0:perspective`;
+}
+
 export default function ProjectPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
 
-  // Hooks are always called unconditionally — the slug guard lives inside each hook
   const { project, loading, error, refetch: refetchProject } = useProject(slug);
   const { snapshots } = useSnapshots(slug);
   const { goals } = useGoals(slug);
@@ -34,7 +38,18 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
 
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({ name: "", description: "", status: "ACTIVE" });
+  const [editData, setEditData] = useState({
+    name: "",
+    description: "",
+    status: "ACTIVE",
+    world: "",
+    x: "",
+    y: "",
+    z: "",
+    videoUrl: "",
+    mapUrl: "",
+    thumbnailUrl: "",
+  });
 
   if (!slug || slug === "undefined") {
     return <div className="h-64 flex items-center justify-center animate-pulse">Loading...</div>;
@@ -45,7 +60,19 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
 
   const handleSave = async () => {
     try {
-      await api.patch(`/api/projects/${slug}`, editData);
+      const payload: any = {
+        name: editData.name,
+        description: editData.description,
+        status: editData.status,
+        world: editData.world || null,
+        videoUrl: editData.videoUrl || null,
+        mapUrl: editData.mapUrl || null,
+        thumbnailUrl: editData.thumbnailUrl || null,
+        x: editData.x !== "" ? parseFloat(editData.x) : null,
+        y: editData.y !== "" ? parseFloat(editData.y) : null,
+        z: editData.z !== "" ? parseFloat(editData.z) : null,
+      };
+      await api.patch(`/api/projects/${slug}`, payload);
       setIsEditing(false);
       refetchProject();
     } catch (e: any) {
@@ -78,8 +105,8 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
   const fullness = snap?.fullness ?? 0;
   const recentUpdates = (project.updates || []).slice(0, 3);
   const recentComments = (project.comments || []).slice(0, 3);
+  const hasCoords = project.x !== undefined && project.x !== null;
 
-  // If a full tab view is active, render it
   if (activeTab) {
     return (
       <div className="space-y-6">
@@ -159,7 +186,18 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
               {canEdit && (
                 <button
                   onClick={() => {
-                    setEditData({ name: project.name, description: project.description || "", status: project.status });
+                    setEditData({
+                      name: project.name,
+                      description: project.description || "",
+                      status: project.status,
+                      world: project.world || "",
+                      x: project.x !== null && project.x !== undefined ? String(project.x) : "",
+                      y: project.y !== null && project.y !== undefined ? String(project.y) : "",
+                      z: project.z !== null && project.z !== undefined ? String(project.z) : "",
+                      videoUrl: project.videoUrl || "",
+                      mapUrl: project.mapUrl || "",
+                      thumbnailUrl: project.thumbnailUrl || "",
+                    });
                     setIsEditing(!isEditing);
                   }}
                   className="text-sm px-3 py-1.5 bg-muted border border-border rounded-lg hover:bg-accent transition-colors"
@@ -184,15 +222,35 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
               <span className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5" />
                 {project.world}
-                {project.x !== undefined &&
-                  ` (${Math.round(project.x)}, ${Math.round(project.y ?? 64)}, ${Math.round(project.z ?? 0)})`}
               </span>
+            )}
+            {hasCoords && (
+              <a
+                href={bluemapUrl(project.world, project.x!, project.y ?? 64, project.z ?? 0)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View on Bluemap"
+                className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                {Math.round(project.x!)}, {Math.round(project.y ?? 64)}, {Math.round(project.z ?? 0)}
+              </a>
             )}
             {project.members.length > 0 && (
               <span className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
                 {project.members.length} members
               </span>
+            )}
+            {project.videoUrl && (
+              <a
+                href={project.videoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-primary hover:underline"
+              >
+                <Video className="w-3.5 h-3.5" /> Video
+              </a>
             )}
             {project.mapUrl && (
               <a
@@ -242,6 +300,7 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
           {/* Edit form */}
           {isEditing && (
             <div className="mt-2 p-4 border border-border bg-muted/30 rounded-xl space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Basic Info</p>
               <input
                 type="text"
                 value={editData.name}
@@ -254,6 +313,7 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
                 onChange={e => setEditData({ ...editData, description: e.target.value })}
                 className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="Description"
+                rows={3}
               />
               <select
                 value={editData.status}
@@ -265,6 +325,53 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
                 <option value="COMPLETED">COMPLETED</option>
                 <option value="ARCHIVED">ARCHIVED</option>
               </select>
+
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-1">Location</p>
+              <input
+                type="text"
+                value={editData.world}
+                onChange={e => setEditData({ ...editData, world: e.target.value })}
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="World (e.g. world, world_nether)"
+              />
+              <div className="grid grid-cols-3 gap-2">
+                {(["x", "y", "z"] as const).map(axis => (
+                  <div key={axis}>
+                    <label className="text-xs text-muted-foreground mb-1 block uppercase">{axis}</label>
+                    <input
+                      type="number"
+                      value={editData[axis]}
+                      onChange={e => setEditData({ ...editData, [axis]: e.target.value })}
+                      className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-1">Media & Links</p>
+              <input
+                type="url"
+                value={editData.thumbnailUrl}
+                onChange={e => setEditData({ ...editData, thumbnailUrl: e.target.value })}
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Thumbnail URL"
+              />
+              <input
+                type="url"
+                value={editData.videoUrl}
+                onChange={e => setEditData({ ...editData, videoUrl: e.target.value })}
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Video URL (YouTube, etc.)"
+              />
+              <input
+                type="url"
+                value={editData.mapUrl}
+                onChange={e => setEditData({ ...editData, mapUrl: e.target.value })}
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Map URL"
+              />
+
               <button
                 onClick={handleSave}
                 className="w-full py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:opacity-90 transition-colors"
@@ -363,25 +470,27 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
         {/* RIGHT: Activity sidebar */}
         <div className="space-y-4">
 
-          {/* Members */}
-          {project.members.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08 }}
-              className="bg-card border border-border rounded-xl overflow-hidden"
-            >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <Users className="w-4 h-4 text-primary" /> Team
-                </h2>
-                <button
-                  onClick={() => setActiveTab("Members")}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Manage →
-                </button>
-              </div>
+          {/* Members — always shown */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="bg-card border border-border rounded-xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" /> Team
+              </h2>
+              <button
+                onClick={() => setActiveTab("Members")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Manage →
+              </button>
+            </div>
+            {project.members.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-muted-foreground">No members yet.</p>
+            ) : (
               <div className="p-3 flex flex-wrap gap-2">
                 {project.members.slice(0, 8).map((m) => (
                   <div
@@ -406,28 +515,30 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
                   </span>
                 )}
               </div>
-            </motion.div>
-          )}
+            )}
+          </motion.div>
 
-          {/* Recent Updates */}
-          {recentUpdates.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12 }}
-              className="bg-card border border-border rounded-xl overflow-hidden"
-            >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-primary" /> Recent Updates
-                </h2>
-                <button
-                  onClick={() => setActiveTab("Updates")}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  All {project.updates?.length} →
-                </button>
-              </div>
+          {/* Updates — always shown */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="bg-card border border-border rounded-xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Zap className="w-4 h-4 text-primary" /> Recent Updates
+              </h2>
+              <button
+                onClick={() => setActiveTab("Updates")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {recentUpdates.length > 0 ? `All ${project.updates?.length} →` : "Post one →"}
+              </button>
+            </div>
+            {recentUpdates.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-muted-foreground">No updates yet.</p>
+            ) : (
               <div className="divide-y divide-border">
                 {recentUpdates.map((update) => (
                   <div key={update.id} className="px-4 py-3">
@@ -444,28 +555,30 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
                   </div>
                 ))}
               </div>
-            </motion.div>
-          )}
+            )}
+          </motion.div>
 
-          {/* Recent Comments */}
-          {recentComments.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.16 }}
-              className="bg-card border border-border rounded-xl overflow-hidden"
-            >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-primary" /> Comments
-                </h2>
-                <button
-                  onClick={() => setActiveTab("Comments")}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  All {project.comments?.length} →
-                </button>
-              </div>
+          {/* Comments — always shown */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.16 }}
+            className="bg-card border border-border rounded-xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-primary" /> Comments
+              </h2>
+              <button
+                onClick={() => setActiveTab("Comments")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {recentComments.length > 0 ? `All ${project.comments?.length} →` : "Add one →"}
+              </button>
+            </div>
+            {recentComments.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-muted-foreground">No comments yet.</p>
+            ) : (
               <div className="divide-y divide-border">
                 {recentComments.map((c) => (
                   <div key={c.id} className="px-4 py-3 flex gap-2">
@@ -484,28 +597,30 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
                   </div>
                 ))}
               </div>
-            </motion.div>
-          )}
+            )}
+          </motion.div>
 
-          {/* Media preview */}
-          {project.media && project.media.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-card border border-border rounded-xl overflow-hidden"
-            >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4 text-primary" /> Media
-                </h2>
-                <button
-                  onClick={() => setActiveTab("Media")}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  All {project.media.length} →
-                </button>
-              </div>
+          {/* Media — always shown */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-card border border-border rounded-xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary" /> Media
+              </h2>
+              <button
+                onClick={() => setActiveTab("Media")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {project.media && project.media.length > 0 ? `All ${project.media.length} →` : "Add media →"}
+              </button>
+            </div>
+            {!project.media || project.media.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-muted-foreground">No media added yet.</p>
+            ) : (
               <div className="p-3 grid grid-cols-3 gap-2">
                 {project.media.slice(0, 6).filter(m => m.type === "IMAGE").map((m) => (
                   <a key={m.id} href={m.url} target="_blank" rel="noopener noreferrer">
@@ -517,8 +632,8 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
                   </a>
                 ))}
               </div>
-            </motion.div>
-          )}
+            )}
+          </motion.div>
 
         </div>
       </div>
