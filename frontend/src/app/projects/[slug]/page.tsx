@@ -24,8 +24,9 @@ import {
 } from "@/components/project/ProjectTabs";
 
 export default function ProjectPage({ params }: { params: { slug: string } }) {
-  const slug = params.slug;
+  const slug = params?.slug;
 
+  // Hooks are always called unconditionally — the slug guard lives inside each hook
   const { project, loading, error, refetch: refetchProject } = useProject(slug);
   const { snapshots } = useSnapshots(slug);
   const { goals } = useGoals(slug);

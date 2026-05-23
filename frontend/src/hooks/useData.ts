@@ -3,6 +3,10 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import type { Project } from "@/types";
 
+function isValidSlug(slug: string | undefined): slug is string {
+  return !!slug && slug !== "undefined" && slug !== "null" && slug.trim() !== "";
+}
+
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +39,10 @@ export function useProject(slug: string) {
   const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
+    if (!isValidSlug(slug)) {
+      setLoading(false);
+      return;
+    }
     try {
       const data = await api.get<Project>(`/api/projects/${slug}`);
       setProject(data);
@@ -60,6 +68,10 @@ export function useSnapshots(slug: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isValidSlug(slug)) {
+      setLoading(false);
+      return;
+    }
     api.get<any[]>(`/api/projects/${slug}/snapshots?limit=48`)
       .then(setSnapshots)
       .catch(console.error)
@@ -73,6 +85,7 @@ export function useGoals(slug: string) {
   const [goals, setGoals] = useState<any[]>([]);
 
   useEffect(() => {
+    if (!isValidSlug(slug)) return;
     api.get<any[]>(`/api/projects/${slug}/goals`)
       .then(setGoals)
       .catch(console.error);
