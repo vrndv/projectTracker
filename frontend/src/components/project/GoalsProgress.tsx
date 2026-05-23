@@ -1,44 +1,61 @@
+// frontend/src/components/project/GoalsProgress.tsx
 "use client";
-import { formatMaterial, formatNumber } from "@/lib/utils";
-import type { ProjectGoal } from "@/types";
-import { cn } from "@/lib/utils";
 
-interface Props {
+import { cn } from "@/lib/utils";
+import { MinecraftItem } from "./MinecraftItem";
+import type { ProjectGoal } from "@/types";
+
+interface GoalsProgressProps {
   goals: ProjectGoal[];
 }
 
-export function GoalsProgress({ goals }: Props) {
-  if (!goals.length) {
-    return (
-      <p className="text-sm text-muted-foreground">No goals set. Admins can add goals via the admin panel.</p>
-    );
+function goalColor(pct: number) {
+  if (pct >= 100) return "bg-green-500";
+  if (pct >= 60) return "bg-primary";
+  if (pct >= 30) return "bg-yellow-500";
+  return "bg-red-500";
+}
+
+export function GoalsProgress({ goals }: GoalsProgressProps) {
+  if (!goals || goals.length === 0) {
+    return <p className="text-sm text-muted-foreground">No goals set yet.</p>;
   }
 
   return (
     <div className="space-y-4">
       {goals.map((goal) => {
-        const pct = goal.percent ?? 0;
-        const barColor = pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-primary" : "bg-blue-500";
+        const current = goal.currentAmount ?? 0;
+        const required = goal.requiredAmount;
+        const pct = Math.min((current / required) * 100, 100);
+        const done = pct >= 100;
+
         return (
-          <div key={goal.id}>
-            <div className="flex justify-between text-sm mb-1.5">
-              <span className="font-medium">{formatMaterial(goal.material)}</span>
-              <span className="text-muted-foreground tabular-nums">
-                {formatNumber(goal.currentAmount ?? 0)} / {formatNumber(goal.requiredAmount)}
-                <span className={cn("ml-2 font-semibold", pct >= 100 ? "text-green-400" : "text-foreground")}>
-                  {pct}%
+          <div key={goal.id} className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <MinecraftItem name={goal.material} size={20} />
+                <span className={cn("text-sm font-medium truncate", done && "text-green-500")}>
+                  {goal.material.replace(/_/g, " ")}
                 </span>
+                {done && (
+                  <span className="text-[10px] bg-green-500/10 text-green-500 border border-green-500/20 rounded px-1.5 py-0.5 uppercase tracking-wider font-medium flex-shrink-0">
+                    Done
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground flex-shrink-0 tabular-nums">
+                {current.toLocaleString()} / {required.toLocaleString()}
               </span>
             </div>
+
             <div className="h-2 bg-muted rounded-full overflow-hidden">
               <div
-                className={cn("h-full rounded-full transition-all duration-700", barColor)}
-                style={{ width: `${Math.min(pct, 100)}%` }}
+                className={cn("h-full rounded-full transition-all duration-500", goalColor(pct))}
+                style={{ width: `${pct}%` }}
               />
             </div>
-            {pct >= 100 && (
-              <p className="text-xs text-green-400 mt-0.5">✓ Goal reached!</p>
-            )}
+
+            <p className="text-xs text-muted-foreground text-right">{pct.toFixed(1)}%</p>
           </div>
         );
       })}

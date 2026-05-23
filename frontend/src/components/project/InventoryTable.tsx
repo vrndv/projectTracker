@@ -1,86 +1,95 @@
+// frontend/src/components/project/InventoryTable.tsx
 "use client";
-import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
-import { formatMaterial } from "@/lib/utils";
-import type { ItemSnapshot } from "@/types";
 
-interface Props {
-  items: ItemSnapshot[];
+import { useState } from "react";
+import { cn, formatNumber } from "@/lib/utils";
+import { MinecraftItem } from "./MinecraftItem";
+
+interface InventoryItem {
+  name: string;
+  count: number;
+  [key: string]: any;
 }
 
-export function InventoryTable({ items }: Props) {
+interface InventoryTableProps {
+  items: InventoryItem[];
+  /** Show only top N rows (expandable). Default 15 */
+  initialRows?: number;
+}
+
+export function InventoryTable({ items, initialRows = 15 }: InventoryTableProps) {
+  const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
 
-  const sorted = useMemo(() => {
-    return [...items].sort((a, b) => b.amount - a.amount);
-  }, [items]);
+  const filtered = items
+    .filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => b.count - a.count);
 
-  const filtered = useMemo(() => {
-    if (!search) return sorted;
-    return sorted.filter((i) =>
-      i.material.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [sorted, search]);
-
-  const max = sorted[0]?.amount ?? 1;
+  const visible = expanded ? filtered : filtered.slice(0, initialRows);
+  const hasMore = filtered.length > initialRows;
 
   return (
-    <div>
-      <div className="relative mb-3">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+    <div className="space-y-3">
+      {items.length > initialRows && (
         <input
           type="text"
-          placeholder="Search items…"
+          placeholder="Search items..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 text-sm bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          onChange={e => setSearch(e.target.value)}
+          className="w-full text-sm bg-muted border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
         />
+      )}
+
+      <div className="rounded-lg overflow-hidden border border-border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/50">
+              <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground w-8" />
+              <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Item</th>
+              <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((item, i) => (
+              <tr
+                key={item.name}
+                className={cn(
+                  "border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors",
+                )}
+              >
+                <td className="py-2 px-3">
+                  <MinecraftItem name={item.name} size={20} />
+                </td>
+                <td className="py-2 px-3 font-medium capitalize">
+                  {item.name.replace(/_/g, " ")}
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
+                  {formatNumber(item.count)}
+                </td>
+              </tr>
+            ))}
+
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={3} className="py-4 text-center text-xs text-muted-foreground">
+                  No items match "{search}"
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
-      <div className="rounded-lg border border-border overflow-hidden">
-        <div className="max-h-80 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-card">
-              <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
-                <th className="text-left py-2.5 px-3">Material</th>
-                <th className="text-right py-2.5 px-3">Amount</th>
-                <th className="w-28 py-2.5 px-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item) => {
-                const pct = Math.round((item.amount / max) * 100);
-                return (
-                  <tr key={item.material} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                    <td className="py-2 px-3 font-mono text-xs text-muted-foreground">
-                      {formatMaterial(item.material)}
-                    </td>
-                    <td className="py-2 px-3 text-right font-medium tabular-nums">
-                      {item.amount.toLocaleString()}
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="h-1 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary/60 rounded-full"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="py-8 text-center text-muted-foreground text-sm">
-                    No items match "{search}"
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground mt-2">{filtered.length} item types</p>
+      {hasMore && !search && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 border border-dashed border-border rounded-lg transition-colors"
+        >
+          {expanded
+            ? "Show less"
+            : `Show ${filtered.length - initialRows} more items`}
+        </button>
+      )}
     </div>
   );
 }
