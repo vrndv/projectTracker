@@ -5,24 +5,21 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface MinecraftItemProps {
-  /** Minecraft item/block name, e.g. "iron_ingot" or "oak_log" */
   name: string;
-  /** Override display label. Defaults to prettified name. */
   label?: string;
   size?: number;
   className?: string;
 }
 
 function prettify(name: string): string {
-  return name
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return name.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function MinecraftItem({ name, label, size = 24, className }: MinecraftItemProps) {
   const [imgError, setImgError] = useState(false);
   const displayName = label ?? prettify(name);
-  const imgUrl = `https://blocksitems.com/api/v1/items/minecraft:${name.toLowerCase()}/icon`; 
+  // Issue 2 fix: use blocksitems.com API with minecraft: prefix
+  const imgUrl = `https://blocksitems.com/api/v1/items/minecraft:${name.toLowerCase()}/icon`;
 
   return (
     <span className={cn("relative inline-flex items-center group", className)}>
@@ -37,7 +34,6 @@ export function MinecraftItem({ name, label, size = 24, className }: MinecraftIt
           className="flex-shrink-0"
         />
       ) : (
-        // Fallback: generic block icon
         <span
           style={{ width: size, height: size }}
           className="flex-shrink-0 bg-muted rounded flex items-center justify-center text-[10px] text-muted-foreground font-bold select-none"
@@ -45,8 +41,6 @@ export function MinecraftItem({ name, label, size = 24, className }: MinecraftIt
           ?
         </span>
       )}
-
-      {/* Minecraft-style tooltip on hover */}
       <span
         className={cn(
           "pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2",
@@ -58,7 +52,6 @@ export function MinecraftItem({ name, label, size = 24, className }: MinecraftIt
         style={{ fontFamily: "'VT323', monospace", fontSize: 14 }}
       >
         {displayName}
-        {/* Minecraft-style purple glow effect on tooltip border */}
         <span className="absolute inset-0 rounded border border-[#7a4fa3]/40 pointer-events-none" />
       </span>
     </span>

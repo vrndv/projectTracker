@@ -1,18 +1,20 @@
 // frontend/src/components/project/ProjectTabs.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import {
   Package, Layers, Database, BarChart2, Target,
-  MessageSquare, Image as ImageIcon, ExternalLink, Plus, Send, Users
+  MessageSquare, Image as ImageIcon, ExternalLink, Plus, Send, Users,
+  Search, X, ChevronDown, Layers2,
 } from "lucide-react";
 import { cn, formatNumber, fullnessBg } from "@/lib/utils";
 import { InventoryTable } from "./InventoryTable";
 import { SnapshotCharts } from "../charts/SnapshotCharts";
 import { MinecraftItem } from "./MinecraftItem";
+import { useMinecraftItems, getStackSize, formatStacks, type MCItem } from "@/hooks/useMinecraftItems";
 import type {
   Project, ProjectGoal, ProjectUpdate, ProjectComment,
   ProjectMedia, ProjectMember, User
@@ -25,18 +27,187 @@ interface TabProps {
 }
 
 // ---------------------------
+// Material Picker
+// A searchable dropdown backed by the MineCatalog registry.
+// Players can type a plain name ("iron ingot") or a namespace ("iron_ingot").
+// ---------------------------
+interface MaterialPickerProps {
+  value: string;
+  onChange: (itemId: string) => void;
+  items: MCItem[];
+  loading: boolean;
+  disabled?: boolean;
+}
+
+function MaterialPicker({ value, onChange, items, loading, disabled }: MaterialPickerProps) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return items.slice(0, 60);
+    const q = query.toLowerCase().replace(/[\s_-]+/g, "");
+    return items
+      .filter((i) => {
+        const id = i.itemId.replace(/_/g, "");
+        const name = i.displayName.toLowerCase().replace(/\s+/g, "");
+        return id.includes(q) || name.includes(q);
+      })
+      .slice(0, 60);
+  }, [query, items]);
+
+  const selected = items.find((i) => i.itemId === value);
+
+  return (
+    <div ref={containerRef} className="relative flex-1 min-w-[220px]">
+      <label className="text-xs text-muted-foreground mb-1 block">Material</label>
+
+      {/* Trigger button */}
+      <button
+        type="button"
+        disabled={disabled || loading}
+        onClick={() => { setOpen((o) => !o); setQuery(""); }}
+        className={cn(
+          "w-full flex items-center gap-2 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-left",
+          "hover:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary transition-colors",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+      >
+        {selected ? (
+          <>
+            <MinecraftItem name={selected.itemId} size={18} />
+            <span className="flex-1 truncate">{selected.displayName}</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{selected.itemId}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground flex-1">
+            {loading ? "Loading items…" : "Search for a material…"}
+          </span>
+        )}
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0", open && "rotate-180")} />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-popover border border-border rounded-xl shadow-xl overflow-hidden">
+          {/* Search input */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name or id…"
+              className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery("")}>
+                <X className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* Results */}
+          <div className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-4 text-sm text-muted-foreground text-center">No items found</p>
+            ) : (
+              filtered.map((item) => (
+                <button
+                  key={item.itemId}
+                  type="button"
+                  onClick={() => { onChange(item.itemId); setOpen(false); setQuery(""); }}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
+                    value === item.itemId && "bg-primary/10 text-primary"
+                  )}
+                >
+                  <MinecraftItem name={item.itemId} size={18} />
+                  <span className="flex-1 truncate">{item.displayName}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">{item.itemId}</span>
+                  {item.stackSize < 64 && (
+                    <span className={cn(
+                      "text-[10px] px-1 rounded flex-shrink-0",
+                      item.stackSize === 1
+                        ? "bg-red-500/10 text-red-400"
+                        : "bg-yellow-500/10 text-yellow-400"
+                    )}>
+                      ×{item.stackSize}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------
+// Stack count display
+// ---------------------------
+function StackCount({ amount, material, mcItems }: { amount: number; material: string; mcItems: MCItem[] }) {
+  const stackSize = getStackSize(mcItems, material);
+  const stacks = stackSize > 1 ? Math.floor(amount / stackSize) : 0;
+  const remainder = stackSize > 1 ? amount % stackSize : amount;
+
+  if (stackSize <= 1) {
+    // Non-stackable: just show item count
+    return (
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {amount.toLocaleString()} items
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+      {stacks > 0 && (
+        <span className="inline-flex items-center gap-0.5">
+          <Layers2 className="w-3 h-3" />
+          {stacks}
+        </span>
+      )}
+      {stacks > 0 && remainder > 0 && <span className="opacity-40">+</span>}
+      {remainder > 0 && (
+        <span>{remainder}</span>
+      )}
+      {stacks === 0 && <span>items</span>}
+    </span>
+  );
+}
+
+// ---------------------------
 // 1. GOALS TAB
 // ---------------------------
 export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: ProjectGoal[] }) {
+  const { items: mcItems, loading: mcLoading } = useMinecraftItems();
   const [material, setMaterial] = useState("");
   const [amount, setAmount] = useState("");
   const [editingGoal, setEditingGoal] = useState<ProjectGoal | null>(null);
   const [editAmount, setEditAmount] = useState("");
+  const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canManage = user && ["ADMIN", "BUILDER"].includes(user.role);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!material) return;
+    setSaving(true);
     try {
       await api.post(`/api/projects/${slug}/goals`, {
         material,
@@ -47,12 +218,17 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
       refetch();
     } catch (err: any) {
       alert(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleEdit = async (goal: ProjectGoal) => {
+    if (!editAmount) return;
+    setSaving(true);
     try {
-      await api.patch(`/api/projects/${slug}/goals/${goal.id}`, {
+      // Fix: coerce id to string explicitly in URL, pass correct body key
+      await api.patch(`/api/projects/${slug}/goals/${String(goal.id)}`, {
         requiredAmount: parseInt(editAmount),
       });
       setEditingGoal(null);
@@ -60,14 +236,18 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
       refetch();
     } catch (err: any) {
       alert(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (goalId: string) => {
+  const handleDelete = async (goalId: string | number) => {
     if (!confirm("Delete this goal?")) return;
-    setDeletingId(goalId);
+    const id = String(goalId);
+    setDeletingId(id);
     try {
-      await api.delete(`/api/projects/${slug}/goals/${goalId}`);
+      // Fix: coerce to string so URL is never "goals/undefined"
+      await api.delete(`/api/projects/${slug}/goals/${id}`);
       refetch();
     } catch (err: any) {
       alert(err.message);
@@ -83,22 +263,12 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
           onSubmit={handleSubmit}
           className="bg-card border border-border rounded-xl p-4 flex flex-wrap gap-3 items-end"
         >
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-xs text-muted-foreground mb-1 block">
-              Material Name (e.g. iron_ingot)
-            </label>
-            <div className="flex items-center gap-2">
-              {material && <MinecraftItem name={material} size={20} />}
-              <input
-                required
-                type="text"
-                value={material}
-                onChange={e => setMaterial(e.target.value)}
-                className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="iron_ingot"
-              />
-            </div>
-          </div>
+          <MaterialPicker
+            value={material}
+            onChange={setMaterial}
+            items={mcItems}
+            loading={mcLoading}
+          />
           <div className="w-32">
             <label className="text-xs text-muted-foreground mb-1 block">Target</label>
             <input
@@ -106,16 +276,17 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
               type="number"
               min="1"
               value={amount}
-              onChange={e => setAmount(e.target.value)}
+              onChange={(e) => setAmount(e.target.value)}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               placeholder="1000"
             />
           </div>
           <button
             type="submit"
-            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90"
+            disabled={saving || !material}
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            Add Goal
+            {saving ? "Saving…" : "Add Goal"}
           </button>
         </form>
       )}
@@ -125,34 +296,59 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
           <h2 className="font-semibold flex items-center gap-2">
             <Target className="w-4 h-4 text-primary" /> Resource Goals
           </h2>
-          <span className="text-xs text-muted-foreground">{goals.length} goal{goals.length !== 1 ? "s" : ""}</span>
+          <span className="text-xs text-muted-foreground">
+            {goals.length} goal{goals.length !== 1 ? "s" : ""}
+          </span>
         </div>
 
         {(!goals || goals.length === 0) ? (
-          <p className="text-sm text-muted-foreground">No goals set yet.{canManage ? " Use the form above to add one." : ""}</p>
+          <p className="text-sm text-muted-foreground">
+            No goals set yet.{canManage ? " Use the form above to add one." : ""}
+          </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {goals.map((goal) => {
               const current = goal.currentAmount ?? 0;
               const required = goal.requiredAmount;
               const pct = Math.min((current / required) * 100, 100);
               const done = pct >= 100;
               const isEditing = editingGoal?.id === goal.id;
+              const stackSize = getStackSize(mcItems, goal.material);
+              const goalId = String(goal.id);
 
               return (
-                <div key={goal.id} className="space-y-1.5">
+                <div key={goalId} className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
+                    {/* Left: icon + name */}
                     <div className="flex items-center gap-2 min-w-0">
                       <MinecraftItem name={goal.material} size={20} />
-                      <span className={cn("text-sm font-medium truncate", done && "text-green-500")}>
-                        {goal.material.replace(/_/g, " ")}
-                      </span>
+                      <div className="min-w-0">
+                        <span className={cn("text-sm font-medium truncate block", done && "text-green-500")}>
+                          {goal.material.replace(/_/g, " ")}
+                        </span>
+                        {/* Issue 3: stack-aware count */}
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatStacks(current, stackSize)}
+                          {" / "}
+                          {formatStacks(required, stackSize)}
+                          {stackSize < 64 && (
+                            <span className={cn(
+                              "ml-1 px-1 rounded text-[10px]",
+                              stackSize === 1 ? "bg-red-500/10 text-red-400" : "bg-yellow-500/10 text-yellow-400"
+                            )}>
+                              ×{stackSize}
+                            </span>
+                          )}
+                        </span>
+                      </div>
                       {done && (
                         <span className="text-[10px] bg-green-500/10 text-green-500 border border-green-500/20 rounded px-1.5 py-0.5 uppercase tracking-wider font-medium flex-shrink-0">
                           Done
                         </span>
                       )}
                     </div>
+
+                    {/* Right: raw numbers + actions */}
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-xs text-muted-foreground tabular-nums">
                         {current.toLocaleString()} / {required.toLocaleString()}
@@ -170,10 +366,10 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
                           </button>
                           <button
                             onClick={() => handleDelete(goal.id)}
-                            disabled={deletingId === goal.id}
+                            disabled={deletingId === goalId}
                             className="text-xs px-2 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500/20 transition-colors disabled:opacity-50"
                           >
-                            {deletingId === goal.id ? "…" : "Delete"}
+                            {deletingId === goalId ? "…" : "Delete"}
                           </button>
                         </>
                       )}
@@ -186,22 +382,24 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
                         type="number"
                         min="1"
                         value={editAmount}
-                        onChange={e => setEditAmount(e.target.value)}
+                        onChange={(e) => setEditAmount(e.target.value)}
                         className="w-28 bg-muted border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                         placeholder="New target"
                       />
                       <button
                         onClick={() => handleEdit(goal)}
-                        className="bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-90"
+                        disabled={saving}
+                        className="bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
                       >
-                        Save
+                        {saving ? "Saving…" : "Save"}
                       </button>
                     </div>
                   )}
 
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
-                      className={cn("h-full rounded-full transition-all duration-500",
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
                         pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-primary" : pct >= 30 ? "bg-yellow-500" : "bg-red-500"
                       )}
                       style={{ width: `${pct}%` }}
@@ -252,14 +450,14 @@ export function UpdatesTab({
             type="text"
             placeholder="Update Title"
             value={title}
-            onChange={e => setTitle(e.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
             className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <textarea
             required
             placeholder="Write your update... (Markdown supported)"
             value={content}
-            onChange={e => setContent(e.target.value)}
+            onChange={(e) => setContent(e.target.value)}
             rows={3}
             className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
@@ -330,7 +528,7 @@ export function CommentsTab({
             type="text"
             placeholder="Add a comment..."
             value={content}
-            onChange={e => setContent(e.target.value)}
+            onChange={(e) => setContent(e.target.value)}
             className="flex-1 bg-card border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <button
@@ -403,7 +601,7 @@ export function MediaTab({
             <label className="text-xs text-muted-foreground mb-1 block">Type</label>
             <select
               value={type}
-              onChange={e => setType(e.target.value)}
+              onChange={(e) => setType(e.target.value)}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="IMAGE">Image</option>
@@ -418,7 +616,7 @@ export function MediaTab({
               type="url"
               placeholder="https://..."
               value={url}
-              onChange={e => setUrl(e.target.value)}
+              onChange={(e) => setUrl(e.target.value)}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
@@ -437,13 +635,7 @@ export function MediaTab({
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {media.map((m) =>
             m.type === "IMAGE" ? (
-              <a
-                key={m.id}
-                href={m.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block aspect-video"
-              >
+              <a key={m.id} href={m.url} target="_blank" rel="noopener noreferrer" className="block aspect-video">
                 <img
                   src={m.url}
                   alt="Project media"
@@ -505,7 +697,7 @@ export function MembersTab({
               required
               type="text"
               value={userId}
-              onChange={e => setUserId(e.target.value)}
+              onChange={(e) => setUserId(e.target.value)}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               placeholder="cuid_..."
             />
@@ -514,7 +706,7 @@ export function MembersTab({
             <label className="text-xs text-muted-foreground mb-1 block">Project Role</label>
             <select
               value={role}
-              onChange={e => setRole(e.target.value)}
+              onChange={(e) => setRole(e.target.value)}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="MEMBER">Member</option>
