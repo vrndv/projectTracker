@@ -23,8 +23,9 @@ import {
   GoalsTab, UpdatesTab, CommentsTab, MediaTab, MembersTab
 } from "@/components/project/ProjectTabs";
 
-// 1. MAIN COMPONENT: Only runs when a valid slug is provided
-function ProjectContent({ slug }: { slug: string }) {
+export default function ProjectPage({ params }: { params: { slug: string } }) {
+  const slug = params.slug;
+
   const { project, loading, error, refetch: refetchProject } = useProject(slug);
   const { snapshots } = useSnapshots(slug);
   const { goals } = useGoals(slug);
@@ -33,6 +34,10 @@ function ProjectContent({ slug }: { slug: string }) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({ name: "", description: "", status: "ACTIVE" });
+
+  if (!slug || slug === "undefined") {
+    return <div className="h-64 flex items-center justify-center animate-pulse">Loading...</div>;
+  }
 
   const canEdit = user && ["ADMIN", "BUILDER", "MEMBER"].includes(user.role);
   const canDelete = user && ["ADMIN", "BUILDER"].includes(user.role);
@@ -518,26 +523,4 @@ function ProjectContent({ slug }: { slug: string }) {
       </div>
     </div>
   );
-}
-
-// 2. PAGE WRAPPER: Gatekeeps the hooks and acts as a loader
-export default function ProjectPage({ params }: { params: { slug: string } }) {
-  const slug = params?.slug;
-
-  // Intercept the render if the slug isn't ready or if there's a routing error 
-  if (!slug || slug === "undefined") {
-    return (
-      <div className="h-64 flex flex-col items-center justify-center animate-pulse space-y-4">
-        <p className="text-muted-foreground">Loading Project...</p>
-        {slug === "undefined" && (
-           <Link href="/" className="text-sm text-primary hover:underline">
-             If you are stuck, return to Dashboard
-           </Link>
-        )}
-      </div>
-    );
-  }
-
-  // Only render the inner component once the slug is a valid string
-  return <ProjectContent slug={slug} />;
 }
