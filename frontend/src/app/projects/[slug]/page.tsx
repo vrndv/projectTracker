@@ -389,30 +389,28 @@ export default function ProjectPage({ params }: { params: Promise<{ slug: string
         {/* LEFT: Goals + Inventory (spans 2 cols) */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Goals */}
-          {goals.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="bg-card border border-border rounded-xl overflow-hidden"
-            >
-              <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <Target className="w-4 h-4 text-primary" /> Resource Goals
-                </h2>
-                <button
-                  onClick={() => setActiveTab("Goals")}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Manage →
-                </button>
-              </div>
-              <div className="p-5">
-                <GoalsProgress goals={goals} />
-              </div>
-            </motion.div>
-          )}
+          {/* Goals — always shown so users can manage even when empty */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-card border border-border rounded-xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Target className="w-4 h-4 text-primary" /> Resource Goals
+              </h2>
+              <button
+                onClick={() => setActiveTab("Goals")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {goals.length > 0 ? "Manage →" : "Set goals →"}
+              </button>
+            </div>
+            <div className="p-5">
+              <GoalsProgress goals={goals} />
+            </div>
+          </motion.div>
 
           {/* Live Inventory */}
           {snap && snap.items.length > 0 && (

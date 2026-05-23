@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { cn, formatNumber, fullnessBg } from "@/lib/utils";
 import { InventoryTable } from "./InventoryTable";
-import { GoalsProgress } from "./GoalsProgress";
 import { SnapshotCharts } from "../charts/SnapshotCharts";
 import { MinecraftItem } from "./MinecraftItem";
 import type {
@@ -31,6 +30,9 @@ interface TabProps {
 export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: ProjectGoal[] }) {
   const [material, setMaterial] = useState("");
   const [amount, setAmount] = useState("");
+  const [editingGoal, setEditingGoal] = useState<ProjectGoal | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const canManage = user && ["ADMIN", "BUILDER"].includes(user.role);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,9 +44,35 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
       });
       setMaterial("");
       setAmount("");
-      window.location.reload();
+      refetch();
     } catch (err: any) {
       alert(err.message);
+    }
+  };
+
+  const handleEdit = async (goal: ProjectGoal) => {
+    try {
+      await api.patch(`/api/projects/${slug}/goals/${goal.id}`, {
+        requiredAmount: parseInt(editAmount),
+      });
+      setEditingGoal(null);
+      setEditAmount("");
+      refetch();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDelete = async (goalId: string) => {
+    if (!confirm("Delete this goal?")) return;
+    setDeletingId(goalId);
+    try {
+      await api.delete(`/api/projects/${slug}/goals/${goalId}`);
+      refetch();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -87,7 +115,7 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
             type="submit"
             className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90"
           >
-            Set Goal
+            Add Goal
           </button>
         </form>
       )}
@@ -97,13 +125,94 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
           <h2 className="font-semibold flex items-center gap-2">
             <Target className="w-4 h-4 text-primary" /> Resource Goals
           </h2>
-          {canManage && (
-            <span className="text-xs text-muted-foreground">
-              Submit an existing material to edit its target
-            </span>
-          )}
+          <span className="text-xs text-muted-foreground">{goals.length} goal{goals.length !== 1 ? "s" : ""}</span>
         </div>
-        <GoalsProgress goals={goals} />
+
+        {(!goals || goals.length === 0) ? (
+          <p className="text-sm text-muted-foreground">No goals set yet.{canManage ? " Use the form above to add one." : ""}</p>
+        ) : (
+          <div className="space-y-4">
+            {goals.map((goal) => {
+              const current = goal.currentAmount ?? 0;
+              const required = goal.requiredAmount;
+              const pct = Math.min((current / required) * 100, 100);
+              const done = pct >= 100;
+              const isEditing = editingGoal?.id === goal.id;
+
+              return (
+                <div key={goal.id} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MinecraftItem name={goal.material} size={20} />
+                      <span className={cn("text-sm font-medium truncate", done && "text-green-500")}>
+                        {goal.material.replace(/_/g, " ")}
+                      </span>
+                      {done && (
+                        <span className="text-[10px] bg-green-500/10 text-green-500 border border-green-500/20 rounded px-1.5 py-0.5 uppercase tracking-wider font-medium flex-shrink-0">
+                          Done
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {current.toLocaleString()} / {required.toLocaleString()}
+                      </span>
+                      {canManage && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingGoal(isEditing ? null : goal);
+                              setEditAmount(String(goal.requiredAmount));
+                            }}
+                            className="text-xs px-2 py-1 bg-muted border border-border rounded hover:bg-accent transition-colors"
+                          >
+                            {isEditing ? "Cancel" : "Edit"}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(goal.id)}
+                            disabled={deletingId === goal.id}
+                            className="text-xs px-2 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                          >
+                            {deletingId === goal.id ? "…" : "Delete"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing && (
+                    <div className="flex gap-2 items-center pl-7">
+                      <input
+                        type="number"
+                        min="1"
+                        value={editAmount}
+                        onChange={e => setEditAmount(e.target.value)}
+                        className="w-28 bg-muted border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        placeholder="New target"
+                      />
+                      <button
+                        onClick={() => handleEdit(goal)}
+                        className="bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-90"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full transition-all duration-500",
+                        pct >= 100 ? "bg-green-500" : pct >= 60 ? "bg-primary" : pct >= 30 ? "bg-yellow-500" : "bg-red-500"
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-right">{pct.toFixed(1)}%</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
