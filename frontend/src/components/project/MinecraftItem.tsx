@@ -22,7 +22,7 @@ function prettify(name: string): string {
 export function MinecraftItem({ name, label, size = 24, className }: MinecraftItemProps) {
   const [imgError, setImgError] = useState(false);
   const displayName = label ?? prettify(name);
-  const imgUrl = `https://api.minecraftitems.xyz/api/item/${name.toLowerCase()}`;
+  const imgUrl = `https://blocksitems.com/api/v1/items/minecraft:${name.toLowerCase()}/icon`; 
 
   return (
     <span className={cn("relative inline-flex items-center group", className)}>
