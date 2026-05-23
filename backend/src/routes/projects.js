@@ -19,6 +19,10 @@ router.post("/:slug/updates", requireAuth, requireRole("ADMIN", "BUILDER", "MEMB
 router.post("/:slug/media", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.addMedia);
 router.post("/:slug/goals", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.setGoal);
 
+// Goals PATCH/DELETE
+router.patch("/:slug/goals/:goalId", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.updateGoal);
+router.delete("/:slug/goals/:goalId", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.deleteGoal);
+
 // Management (Edit/Delete) with updated roles
 router.patch("/:slug", requireAuth, requireRole("ADMIN", "BUILDER", "MEMBER"), projectController.updateProject);
 router.delete("/:slug", requireAuth, requireRole("ADMIN", "BUILDER"), projectController.deleteProject);

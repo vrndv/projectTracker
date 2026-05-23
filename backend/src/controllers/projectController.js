@@ -5,9 +5,10 @@ async function listProjects(req, res, next) {
   try {
     const { sort = "updatedAt", status, search } = req.query;
 
-    const where = {};
-    if (status) where.status = status.toUpperCase();
-    if (search) where.name = { contains: search, mode: "insensitive" };
+    const where = {
+      ...(status && { status: status.toUpperCase() }),
+      ...(search && { name: { contains: search, mode: "insensitive" } }),
+    };
 
     const orderBy = {
       updatedAt: { updatedAt: "desc" },
@@ -191,6 +192,58 @@ async function setGoal(req, res, next) {
   }
 }
 
+// PATCH /api/projects/:slug/goals/:goalId
+async function updateGoal(req, res, next) {
+  try {
+    const { goalId } = req.params;
+    const { requiredAmount } = req.body;
+
+    if (!requiredAmount || isNaN(parseInt(requiredAmount))) {
+      return res.status(400).json({ error: "requiredAmount must be a number" });
+    }
+
+    const goal = await prisma.projectGoal.findUnique({ where: { id: goalId } });
+    if (!goal) return res.status(404).json({ error: "Goal not found" });
+
+    // Verify the goal belongs to the requested project
+    const project = await prisma.project.findUnique({ where: { slug: req.params.slug } });
+    if (!project || goal.projectId !== project.id) {
+      return res.status(404).json({ error: "Goal not found" });
+    }
+
+    const updated = await prisma.projectGoal.update({
+      where: { id: goalId },
+      data: { requiredAmount: parseInt(requiredAmount) },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// DELETE /api/projects/:slug/goals/:goalId
+async function deleteGoal(req, res, next) {
+  try {
+    const { goalId } = req.params;
+
+    const goal = await prisma.projectGoal.findUnique({ where: { id: goalId } });
+    if (!goal) return res.status(404).json({ error: "Goal not found" });
+
+    // Verify the goal belongs to the requested project
+    const project = await prisma.project.findUnique({ where: { slug: req.params.slug } });
+    if (!project || goal.projectId !== project.id) {
+      return res.status(404).json({ error: "Goal not found" });
+    }
+
+    await prisma.projectGoal.delete({ where: { id: goalId } });
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // POST /api/projects/:slug/updates
 async function addUpdate(req, res, next) {
   try {
@@ -275,5 +328,5 @@ async function addMember(req, res, next) {
 module.exports = {
   listProjects, getProject, getSnapshots, getGoals,
   createProject, updateProject, deleteProject,
-  setGoal, addUpdate, addComment, addMedia, addMember,
+  setGoal, updateGoal, deleteGoal, addUpdate, addComment, addMedia, addMember,
 };

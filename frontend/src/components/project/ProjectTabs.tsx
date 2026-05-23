@@ -100,9 +100,9 @@ function MaterialPicker({ value, onChange, items, loading, disabled }: MaterialP
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-popover border border-border rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#1a1a1a] border border-border rounded-xl shadow-2xl overflow-hidden">
           {/* Search input */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-[#1a1a1a]">
             <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <input
               autoFocus
@@ -120,7 +120,7 @@ function MaterialPicker({ value, onChange, items, loading, disabled }: MaterialP
           </div>
 
           {/* Results */}
-          <div className="max-h-56 overflow-y-auto">
+          <div className="max-h-56 overflow-y-auto bg-[#1a1a1a]">
             {filtered.length === 0 ? (
               <p className="px-3 py-4 text-sm text-muted-foreground text-center">No items found</p>
             ) : (
@@ -130,7 +130,7 @@ function MaterialPicker({ value, onChange, items, loading, disabled }: MaterialP
                   type="button"
                   onClick={() => { onChange(item.itemId); setOpen(false); setQuery(""); }}
                   className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
+                    "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors",
                     value === item.itemId && "bg-primary/10 text-primary"
                   )}
                 >
