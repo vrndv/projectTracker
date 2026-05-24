@@ -194,8 +194,11 @@ function StackCount({ amount, material, mcItems }: { amount: number; material: s
 // ---------------------------
 // 1. GOALS TAB
 // ---------------------------
-export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: ProjectGoal[] }) {
+export function GoalsTab({ slug, goals: initialGoals, user, refetch }: TabProps & { goals: ProjectGoal[] }) {
   const { items: mcItems, loading: mcLoading } = useMinecraftItems();
+  // Local goals state — seeded from props, updated optimistically so UI
+  // responds instantly without waiting for a round-trip refetch.
+  const [goals, setGoals] = useState<ProjectGoal[]>(initialGoals);
   const [material, setMaterial] = useState("");
   const [amount, setAmount] = useState("");
   const [editingGoal, setEditingGoal] = useState<ProjectGoal | null>(null);
@@ -204,15 +207,20 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canManage = user && ["ADMIN", "BUILDER"].includes(user.role);
 
+  // Sync when parent polls new data (e.g. currentAmount changes from game)
+  useEffect(() => { setGoals(initialGoals); }, [initialGoals]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!material) return;
     setSaving(true);
     try {
-      await api.post(`/api/projects/${slug}/goals`, {
+      const created = await api.post<ProjectGoal>(`/api/projects/${slug}/goals`, {
         material,
         requiredAmount: parseInt(amount),
       });
+      // Optimistic: add immediately
+      setGoals((prev) => [...prev.filter((g) => g.material !== created.material), created]);
       setMaterial("");
       setAmount("");
       refetch();
@@ -226,15 +234,21 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
   const handleEdit = async (goal: ProjectGoal) => {
     if (!editAmount) return;
     setSaving(true);
+    const newAmount = parseInt(editAmount);
+    // Optimistic: update immediately
+    setGoals((prev) => prev.map((g) => g.id === goal.id ? { ...g, requiredAmount: newAmount } : g));
+    setEditingGoal(null);
+    setEditAmount("");
     try {
-      // Fix: coerce id to string explicitly in URL, pass correct body key
       await api.patch(`/api/projects/${slug}/goals/${String(goal.id)}`, {
-        requiredAmount: parseInt(editAmount),
+        requiredAmount: newAmount,
       });
-      setEditingGoal(null);
-      setEditAmount("");
       refetch();
     } catch (err: any) {
+      // Rollback on failure
+      setGoals((prev) => prev.map((g) => g.id === goal.id ? goal : g));
+      setEditingGoal(goal);
+      setEditAmount(String(goal.requiredAmount));
       alert(err.message);
     } finally {
       setSaving(false);
@@ -245,11 +259,15 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
     if (!confirm("Delete this goal?")) return;
     const id = String(goalId);
     setDeletingId(id);
+    // Optimistic: remove immediately
+    const removed = goals.find((g) => String(g.id) === id);
+    setGoals((prev) => prev.filter((g) => String(g.id) !== id));
     try {
-      // Fix: coerce to string so URL is never "goals/undefined"
       await api.delete(`/api/projects/${slug}/goals/${id}`);
       refetch();
     } catch (err: any) {
+      // Rollback on failure
+      if (removed) setGoals((prev) => [...prev, removed]);
       alert(err.message);
     } finally {
       setDeletingId(null);
@@ -420,16 +438,20 @@ export function GoalsTab({ slug, goals, user, refetch }: TabProps & { goals: Pro
 // 2. UPDATES TAB
 // ---------------------------
 export function UpdatesTab({
-  slug, updates, user, refetch,
+  slug, updates: initialUpdates, user, refetch,
 }: TabProps & { updates: ProjectUpdate[] }) {
+  const [updates, setUpdates] = useState<ProjectUpdate[]>(initialUpdates);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const canPost = user && ["ADMIN", "BUILDER", "MEMBER"].includes(user.role);
 
+  useEffect(() => { setUpdates(initialUpdates); }, [initialUpdates]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post(`/api/projects/${slug}/updates`, { title, content });
+      const created = await api.post<ProjectUpdate>(`/api/projects/${slug}/updates`, { title, content });
+      setUpdates((prev) => [created, ...prev]);
       setTitle("");
       setContent("");
       refetch();
@@ -503,15 +525,19 @@ export function UpdatesTab({
 // 3. COMMENTS TAB
 // ---------------------------
 export function CommentsTab({
-  slug, comments, user, refetch,
+  slug, comments: initialComments, user, refetch,
 }: TabProps & { comments: ProjectComment[] }) {
+  const [comments, setComments] = useState<ProjectComment[]>(initialComments);
   const [content, setContent] = useState("");
   const canPost = user && ["ADMIN", "BUILDER", "MEMBER"].includes(user.role);
+
+  useEffect(() => { setComments(initialComments); }, [initialComments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post(`/api/projects/${slug}/comments`, { content });
+      const created = await api.post<ProjectComment>(`/api/projects/${slug}/comments`, { content });
+      setComments((prev) => [...prev, created]);
       setContent("");
       refetch();
     } catch (err: any) {
@@ -573,16 +599,20 @@ export function CommentsTab({
 // 4. MEDIA TAB
 // ---------------------------
 export function MediaTab({
-  slug, media, user, refetch,
+  slug, media: initialMedia, user, refetch,
 }: TabProps & { media: ProjectMedia[] }) {
+  const [media, setMedia] = useState<ProjectMedia[]>(initialMedia);
   const [url, setUrl] = useState("");
   const [type, setType] = useState("IMAGE");
   const canManage = user && ["ADMIN", "BUILDER"].includes(user.role);
 
+  useEffect(() => { setMedia(initialMedia); }, [initialMedia]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post(`/api/projects/${slug}/media`, { url, type });
+      const created = await api.post<ProjectMedia>(`/api/projects/${slug}/media`, { url, type });
+      setMedia((prev) => [...prev, created]);
       setUrl("");
       refetch();
     } catch (err: any) {

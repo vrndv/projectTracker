@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
-import type { Project } from "@/types";
+import type { Project, ProjectGoal } from "@/types";
 
 function isValidSlug(slug: string | undefined): slug is string {
   return !!slug && slug !== "undefined" && slug !== "null" && slug.trim() !== "";
@@ -39,10 +39,7 @@ export function useProject(slug: string) {
   const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
-    if (!isValidSlug(slug)) {
-      setLoading(false);
-      return;
-    }
+    if (!isValidSlug(slug)) { setLoading(false); return; }
     try {
       const data = await api.get<Project>(`/api/projects/${slug}`);
       setProject(data);
@@ -56,7 +53,7 @@ export function useProject(slug: string) {
 
   useEffect(() => {
     fetch();
-    const interval = setInterval(fetch, 30_000);
+    const interval = setInterval(fetch, 10_000); // poll every 10s for live inventory
     return () => clearInterval(interval);
   }, [fetch]);
 
@@ -68,10 +65,7 @@ export function useSnapshots(slug: string) {
   const [loading, setLoading] = useState(() => isValidSlug(slug));
 
   useEffect(() => {
-    if (!isValidSlug(slug)) {
-      setLoading(false);
-      return;
-    }
+    if (!isValidSlug(slug)) { setLoading(false); return; }
     api.get<any[]>(`/api/projects/${slug}/snapshots?limit=48`)
       .then(setSnapshots)
       .catch(console.error)
@@ -81,17 +75,27 @@ export function useSnapshots(slug: string) {
   return { snapshots, loading };
 }
 
+// Fixed: exposes refetch, polls every 15s so goal progress updates live
 export function useGoals(slug: string) {
-  const [goals, setGoals] = useState<any[]>([]);
+  const [goals, setGoals] = useState<ProjectGoal[]>([]);
 
-  useEffect(() => {
+  const fetch = useCallback(async () => {
     if (!isValidSlug(slug)) return;
-    api.get<any[]>(`/api/projects/${slug}/goals`)
-      .then(setGoals)
-      .catch(console.error);
+    try {
+      const data = await api.get<ProjectGoal[]>(`/api/projects/${slug}/goals`);
+      setGoals(data);
+    } catch (e) {
+      console.error(e);
+    }
   }, [slug]);
 
-  return { goals, setGoals };
+  useEffect(() => {
+    fetch();
+    const interval = setInterval(fetch, 10_000);
+    return () => clearInterval(interval);
+  }, [fetch]);
+
+  return { goals, refetch: fetch };
 }
 
 export function useAuth() {
